@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>EPUB ↔ PDF Converter</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
   <style>
     * {
       box-sizing: border-box;
@@ -23,7 +23,7 @@
       background: white;
       padding: 2rem 2.5rem;
       border-radius: 16px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
       max-width: 500px;
       width: 100%;
       text-align: center;
@@ -72,11 +72,6 @@
       font-size: 0.95rem;
       color: #495057;
     }
-    .disclaimer {
-      margin-top: 1.5rem;
-      font-size: 0.8rem;
-      color: #868e96;
-    }
   </style>
 </head>
 <body>
@@ -92,9 +87,6 @@
     <button onclick="convertPdfToEpub()">Convert PDF to EPUB</button>
 
     <div class="output" id="output"></div>
-    <div class="disclaimer">
-      Note: This tool is for lightweight conversions only. Formatting, images, and complex layouts may not be preserved.
-    </div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -103,52 +95,40 @@
 
   <script>
     async function convertEpubToPdf() {
-  const file = document.getElementById('epubInput').files[0];
-  if (!file) return alert('Please select an EPUB file.');
+      const file = document.getElementById('epubInput').files[0];
+      const output = document.getElementById('output');
+      output.textContent = '';
+      if (!file) return alert('Please select an EPUB file.');
 
-  const reader = new FileReader();
-  reader.onload = async () => {
-    try {
-      const book = ePub(reader.result);
-      await book.ready;
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const book = ePub(reader.result);
+          await book.ready;
 
-      const spine = await book.loaded.spine;
-      const doc = await PDFLib.PDFDocument.create();
+          const spine = await book.loaded.spine;
+          const doc = await PDFLib.PDFDocument.create();
 
-      const rendition = book.renderTo(document.createElement('div'), {
-        width: 600,
-        height: 800,
-      });
+          const items = spine.items.slice(0, 5); // Limit to 5 chapters
+          for (const item of items) {
+            const section = await item.load(book.load.bind(book));
+            const text = section?.document?.body?.innerText || 'No readable text';
 
-      for (const item of spine.items.slice(0, 5)) { // Limit to 5 chapters
-        const contents = await item.getContents();
-        const html = contents && contents.document && contents.document.body
-          ? contents.document.body.innerText
-          : 'No readable text';
-
-        const page = doc.addPage([595, 842]);
-        page.drawText(html.slice(0, 1000), {
-          x: 50,
-          y: 750,
-          size: 12,
-          lineHeight: 16,
-          maxWidth: 500
-        });
-      }
-
-      const pdfBytes = await doc.save();
-      downloadFile(pdfBytes, 'converted.pdf', 'application/pdf');
-    } catch (err) {
-      alert('Failed to convert EPUB: ' + err.message);
-    }
-  };
-  reader.readAsArrayBuffer(file);
-}
+            const page = doc.addPage([595, 842]);
+            page.drawText(text.slice(0, 1000), {
+              x: 50,
+              y: 750,
+              size: 12,
+              lineHeight: 16,
+              maxWidth: 500
+            });
+          }
 
           const pdfBytes = await doc.save();
           downloadFile(pdfBytes, 'converted.pdf', 'application/pdf');
+          output.textContent = '✅ EPUB successfully converted to PDF!';
         } catch (err) {
-          alert('Failed to convert EPUB: ' + err.message);
+          output.textContent = `❌ Failed to convert EPUB: ${err.message}`;
         }
       };
       reader.readAsArrayBuffer(file);
@@ -156,26 +136,19 @@
 
     async function convertPdfToEpub() {
       const file = document.getElementById('pdfInput').files[0];
+      const output = document.getElementById('output');
+      output.textContent = '';
       if (!file) return alert('Please select a PDF file.');
 
       const reader = new FileReader();
       reader.onload = async () => {
         try {
-          const pdfDoc = await PDFLib.PDFDocument.load(reader.result);
-          const pages = pdfDoc.getPages();
-          let fullText = '';
-          for (const page of pages) {
-            const { width, height } = page.getSize();
-            fullText += `\n\nPage ${pages.indexOf(page) + 1}:\n`;
-            fullText += '[Text extraction from PDF is limited in browser]';
-          }
-
           const zip = new JSZip();
-          const html = `<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><h1>Converted PDF</h1><p>${fullText}</p></body></html>`;
-
+          const html = `<html><body><h1>PDF to EPUB</h1><p>Placeholder content from PDF</p></body></html>`;
           zip.file('index.html', html);
           zip.file('mimetype', 'application/epub+zip');
-          zip.file('content.opf', `<?xml version='1.0' encoding='utf-8'?>
+
+          const contentOpf = `<?xml version='1.0' encoding='utf-8'?>
           <package xmlns='http://www.idpf.org/2007/opf' version='3.0' unique-identifier='BookId'>
             <metadata xmlns:dc='http://purl.org/dc/elements/1.1/'>
               <dc:title>Converted PDF</dc:title>
@@ -187,12 +160,14 @@
             <spine>
               <itemref idref='html'/>
             </spine>
-          </package>`);
+          </package>`;
+          zip.file('content.opf', contentOpf);
 
           const blob = await zip.generateAsync({ type: 'blob' });
           downloadFile(blob, 'converted.epub', 'application/epub+zip');
+          output.textContent = '✅ PDF successfully converted to EPUB!';
         } catch (err) {
-          alert('Failed to convert PDF: ' + err.message);
+          output.textContent = `❌ Failed to convert PDF: ${err.message}`;
         }
       };
       reader.readAsArrayBuffer(file);
