@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EPUB ↔ PDF Converter</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(to right, #f8f9fa, #e9ecef);
+      margin: 0;
+      padding: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .container {
+      background: white;
+      padding: 2rem 2.5rem;
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+      max-width: 500px;
+      width: 100%;
+      text-align: center;
+    }
+    h1 {
+      font-size: 1.8rem;
+      margin-bottom: 1.5rem;
+      color: #343a40;
+    }
+    label {
+      display: block;
+      margin: 1rem 0 0.5rem;
+      font-weight: 600;
+      color: #495057;
+      text-align: left;
+    }
+    input[type="file"] {
+      border: 2px dashed #ced4da;
+      padding: 0.75rem;
+      width: 100%;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: border-color 0.3s ease;
+    }
+    input[type="file"]:hover {
+      border-color: #868e96;
+    }
+    button {
+      background-color: #e03131;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem;
+      width: 100%;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      margin-top: 0.75rem;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background-color: #c92a2a;
+    }
+    .output {
+      margin-top: 1.5rem;
+      font-size: 0.95rem;
+      color: #495057;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📚 EPUB ↔ PDF Converter</h1>
+
+    <label for="epubInput">Upload EPUB to convert to PDF</label>
+    <input type="file" id="epubInput" accept=".epub">
+    <button onclick="convertEpubToPdf()">Convert EPUB to PDF</button>
+
+    <label for="pdfInput">Upload PDF to convert to EPUB</label>
+    <input type="file" id="pdfInput" accept=".pdf">
+    <button onclick="convertPdfToEpub()">Convert PDF to EPUB</button>
+
+    <div class="output" id="output"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+  <script src="https://unpkg.com/epubjs/dist/epub.min.js"></script>
+
+  <script>
+    async function convertEpubToPdf() {
+      const file = document.getElementById('epubInput').files[0];
+      if (!file) return alert('Please select an EPUB file.');
+
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const book = ePub(reader.result);
+        await book.ready;
+        const spineItems = await book.loaded.spine;
+
+        const doc = await PDFLib.PDFDocument.create();
+        for (const item of spineItems.items) {
+          const text = await item.load(book.load.bind(book)).then(item => item.contents);
+          const page = doc.addPage([595, 842]);
+          page.drawText(text.document.body.innerText.slice(0, 1000), {
+            x: 50,
+            y: 750,
+            size: 12,
+            lineHeight: 16,
+            maxWidth: 500
+          });
+        }
+
+        const pdfBytes = await doc.save();
+        downloadFile(pdfBytes, 'converted.pdf', 'application/pdf');
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    async function convertPdfToEpub() {
+      const file = document.getElementById('pdfInput').files[0];
+      if (!file) return alert('Please select a PDF file.');
+
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const zip = new JSZip();
+        const html = `<html><body><h1>PDF to EPUB</h1><p>Placeholder content from PDF</p></body></html>`;
+        zip.file('index.html', html);
+        zip.file('mimetype', 'application/epub+zip');
+
+        const contentOpf = `<?xml version='1.0' encoding='utf-8'?>
+        <package xmlns='http://www.idpf.org/2007/opf' version='3.0' unique-identifier='BookId'>
+          <metadata xmlns:dc='http://purl.org/dc/elements/1.1/'>
+            <dc:title>Converted PDF</dc:title>
+            <dc:language>en</dc:language>
+          </metadata>
+          <manifest>
+            <item id='html' href='index.html' media-type='application/xhtml+xml'/>
+          </manifest>
+          <spine>
+            <itemref idref='html'/>
+          </spine>
+        </package>`;
+        zip.file('content.opf', contentOpf);
+
+        const blob = await zip.generateAsync({ type: 'blob' });
+        downloadFile(blob, 'converted.epub', 'application/epub+zip');
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function downloadFile(data, filename, type) {
+      const blob = new Blob([data], { type });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+</body>
+</html>
