@@ -103,30 +103,47 @@
 
   <script>
     async function convertEpubToPdf() {
-      const file = document.getElementById('epubInput').files[0];
-      if (!file) return alert('Please select an EPUB file.');
+  const file = document.getElementById('epubInput').files[0];
+  if (!file) return alert('Please select an EPUB file.');
 
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const book = ePub(reader.result);
-          await book.ready;
-          const spine = await book.loaded.spine;
-          const doc = await PDFLib.PDFDocument.create();
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      const book = ePub(reader.result);
+      await book.ready;
 
-          for (const item of spine.items.slice(0, 5)) { // Limit to 5 chapters max
-            const contents = await item.load(book.load.bind(book));
-            const text = contents?.document?.body?.innerText || 'No readable text';
+      const spine = await book.loaded.spine;
+      const doc = await PDFLib.PDFDocument.create();
 
-            const page = doc.addPage([595, 842]);
-            page.drawText(text.slice(0, 1000), {
-              x: 50,
-              y: 750,
-              size: 12,
-              lineHeight: 16,
-              maxWidth: 500
-            });
-          }
+      const rendition = book.renderTo(document.createElement('div'), {
+        width: 600,
+        height: 800,
+      });
+
+      for (const item of spine.items.slice(0, 5)) { // Limit to 5 chapters
+        const contents = await item.getContents();
+        const html = contents && contents.document && contents.document.body
+          ? contents.document.body.innerText
+          : 'No readable text';
+
+        const page = doc.addPage([595, 842]);
+        page.drawText(html.slice(0, 1000), {
+          x: 50,
+          y: 750,
+          size: 12,
+          lineHeight: 16,
+          maxWidth: 500
+        });
+      }
+
+      const pdfBytes = await doc.save();
+      downloadFile(pdfBytes, 'converted.pdf', 'application/pdf');
+    } catch (err) {
+      alert('Failed to convert EPUB: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
 
           const pdfBytes = await doc.save();
           downloadFile(pdfBytes, 'converted.pdf', 'application/pdf');
